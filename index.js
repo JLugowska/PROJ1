@@ -15,8 +15,6 @@ app.listen(PORT, () => {
 const {
   MQTT_HOST,
   MQTT_PORT,
-  MQTT_USER,
-  MQTT_PASS,
   MQTT_TOPIC,
   MONGO_URI,
   MONGO_DB,
