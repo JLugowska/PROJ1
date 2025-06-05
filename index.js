@@ -1,6 +1,17 @@
 const mqtt = require('mqtt');
 const { MongoClient } = require('mongodb');
+const express = require('express');
+const app = express();
 
+const PORT = process.env.PORT || 3000;
+
+app.get('/', (_, res) => {
+  res.send('Backend MQTT + MongoDB is running ✅');
+});
+
+app.listen(PORT, () => {
+  console.log(`HTTP server listening on port ${PORT}`);
+});
 const {
   MQTT_HOST,
   MQTT_PORT,
