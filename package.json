@@ -1,0 +1,12 @@
+{
+  "name": "esp32-mqtt-backend",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "mqtt": "^4.2.8",
+    "mongodb": "^4.1.0"
+  }
+}
