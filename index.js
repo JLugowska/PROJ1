@@ -5,6 +5,10 @@ const http = require('http');
 
 // === ENV ZMIENNE ===
 const {
+  MQTT_HOST,
+  MQTT_PORT,
+  MQTT_USER,
+  MQTT_PASS,
   MQTT_TOPIC = 'projekt1-2/pw/dane',
   MQTT_STATUS_TOPIC = 'projekt1-2/pw/status',
   MONGO_URI,
