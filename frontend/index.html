@@ -9,16 +9,18 @@
   <ul id="lista"></ul>
 
   <script>
-    fetch('https://proj1-2.onrender.com/api/data') // 
+    fetch('https://proj1-2.onrender.com/api/data')
       .then(res => res.json())
       .then(data => {
         const ul = document.getElementById('lista');
         data.forEach(entry => {
           const li = document.createElement('li');
-          li.textContent = JSON.stringify(entry);
+          const date = new Date(entry.timestamp);
+          li.textContent = `Data: ${date.toLocaleString()}, Dane: ${JSON.stringify(entry)}`;
           ul.appendChild(li);
         });
-      });
+      })
+      .catch(err => console.error('Błąd fetch:', err));
   </script>
 </body>
 </html>
