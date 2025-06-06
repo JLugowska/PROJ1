@@ -54,16 +54,27 @@ mqttClient.on('message', async (topic, message) => {
     console.error("❌ Błąd zapisu danych:", err);
   }
 });
-
-// Prosty serwer HTTP (potrzebny na Render)
-const http = require('http');
+const express = require('express');
+const app = express();
 const PORT = process.env.PORT || 10000;
-http.createServer((req, res) => {
-  res.writeHead(200);
-  res.end("MQTT Backend działa 🚀");
-}).listen(PORT, () => {
-  console.log(`🌐 Serwer HTTP nasłuchuje na porcie ${PORT}`);
+
+// Endpoint API: zwraca dane z MongoDB
+app.get('/api/data', async (req, res) => {
+  try {
+    const data = await mongoCollection.find().sort({ timestamp: -1 }).limit(50).toArray();
+    res.json(data);
+  } catch (err) {
+    console.error("❌ Błąd pobierania danych:", err);
+    res.status(500).send("Błąd serwera");
+  }
 });
 
+app.get('/', (req, res) => {
+  res.send("MQTT Backend działa 🚀");
+});
+
+app.listen(PORT, () => {
+  console.log(`🌐 Serwer nasłuchuje na porcie ${PORT}`);
+});
 // Startujemy!
 connectMongo();
