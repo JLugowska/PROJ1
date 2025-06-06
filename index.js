@@ -93,12 +93,3 @@ app.get('/api/data', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`HTTP server listening on port ${PORT}`);
 });
-
-// === HTTP SERVER dla Render ===
-const PORT = process.env.PORT || 10000;
-http.createServer((req, res) => {
-  res.writeHead(200);
-  res.end('MQTT backend działa\n');
-}).listen(PORT, () => {
-  console.log(`🌐 HTTP serwer działa na porcie ${PORT}`);
-});
