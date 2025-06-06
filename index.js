@@ -1,7 +1,7 @@
 require('dotenv').config();
-const express = require('express');#
-const app = express();#
-const PORT = process.env.PORT || 10000;#
+const express = require('express');
+const app = express();
+const PORT = process.env.PORT || 10000;
 
 const mqtt = require('mqtt');
 const { MongoClient } = require('mongodb');
