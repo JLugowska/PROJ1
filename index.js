@@ -1,69 +1,84 @@
+require('dotenv').config();
 const mqtt = require('mqtt');
 const { MongoClient } = require('mongodb');
-require('dotenv').config();
+const http = require('http');
 
+// === ENV ZMIENNE ===
 const {
-  MQTT_TOPIC,
+  MQTT_TOPIC = 'projekt1-2/pw/dane',
+  MQTT_STATUS_TOPIC = 'projekt1-2/pw/status',
   MONGO_URI,
   MONGO_DB,
   MONGO_COLLECTION
 } = process.env;
 
-// Połączenie z MongoDB
-const mongoClient = new MongoClient(MONGO_URI);
-let mongoCollection;
+// === MQTT KLIENT ===
+const mqttClient = mqtt.connect({
+  host: MQTT_HOST || 'broker.emqx.io',
+  port: MQTT_PORT ? parseInt(MQTT_PORT) : 1883,
+  username: MQTT_USER || undefined,
+  password: MQTT_PASS || undefined,
+  protocol: 'mqtt'
+});
 
-async function connectMongo() {
+let deviceOnline = false;
+
+// === MONGODB ===
+const mongoClient = new MongoClient(MONGO_URI);
+let collection;
+
+async function initMongo() {
   try {
     await mongoClient.connect();
     const db = mongoClient.db(MONGO_DB);
-    mongoCollection = db.collection(MONGO_COLLECTION);
-    console.log("✅ Połączono z MongoDB");
+    collection = db.collection(MONGO_COLLECTION);
+    console.log('✅ Połączono z MongoDB');
   } catch (err) {
-    console.error("❌ Błąd połączenia z MongoDB:", err);
+    console.error('❌ Błąd MongoDB:', err);
   }
 }
 
-// Połączenie z brokerem MQTT
-const mqttClient = mqtt.connect('mqtt://broker.emqx.io');
+initMongo();
 
+// === MQTT EVENTY ===
 mqttClient.on('connect', () => {
-  console.log("✅ Połączono z MQTT");
-  mqttClient.subscribe(MQTT_TOPIC, (err) => {
+  console.log('✅ Połączono z MQTT');
+  mqttClient.subscribe([MQTT_TOPIC, MQTT_STATUS_TOPIC], (err) => {
     if (err) {
-      console.error("❌ Błąd subskrypcji:", err);
+      console.error('❌ Błąd subskrypcji:', err);
     } else {
-      console.log(`📡 Subskrybowano temat: ${MQTT_TOPIC}`);
+      console.log(`📡 Subskrybowano: ${MQTT_TOPIC} i ${MQTT_STATUS_TOPIC}`);
     }
   });
 });
 
 mqttClient.on('message', async (topic, message) => {
-  try {
-    const data = JSON.parse(message.toString());
-    console.log("📥 Odebrano dane:", data);
+  if (topic === MQTT_STATUS_TOPIC) {
+    const status = message.toString();
+    deviceOnline = status === 'online';
+    console.log(`ℹ️ Status urządzenia: ${status}`);
+    return;
+  }
 
-    if (mongoCollection) {
-      await mongoCollection.insertOne({
-        ...data,
-        timestamp: new Date()
-      });
-      console.log("✅ Zapisano do MongoDB");
+  if (topic === MQTT_TOPIC && deviceOnline) {
+    try {
+      const data = JSON.parse(message.toString());
+      data.timestamp = new Date();
+      await collection.insertOne(data);
+      console.log('📥 Zapisano do MongoDB:', data);
+    } catch (err) {
+      console.error('❌ Błąd zapisu:', err);
     }
-  } catch (err) {
-    console.error("❌ Błąd zapisu danych:", err);
+  } else {
+    console.log('⚠️ Pominięto dane (offline)');
   }
 });
 
-// Prosty serwer HTTP (potrzebny na Render)
-const http = require('http');
+// === HTTP SERVER dla Render ===
 const PORT = process.env.PORT || 10000;
 http.createServer((req, res) => {
   res.writeHead(200);
-  res.end("MQTT Backend działa 🚀");
+  res.end('MQTT backend działa\n');
 }).listen(PORT, () => {
-  console.log(`🌐 Serwer HTTP nasłuchuje na porcie ${PORT}`);
+  console.log(`🌐 HTTP serwer działa na porcie ${PORT}`);
 });
-
-// Startujemy!
-connectMongo();
