@@ -17,13 +17,8 @@ const {
 } = process.env;
 
 // === MQTT KLIENT ===
-const mqttClient = mqtt.connect({
-  host: MQTT_HOST || 'broker.emqx.io',
-  port: MQTT_PORT ? parseInt(MQTT_PORT) : 1883,
-  username: MQTT_USER || undefined,
-  password: MQTT_PASS || undefined,
-  protocol: 'mqtt'
-});
+const client = mqtt.connect('mqtt://broker.emqx.io');
+
 
 let deviceOnline = false;
 
