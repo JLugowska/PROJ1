@@ -55,7 +55,9 @@ mqttClient.on('message', async (topic, message) => {
   }
 });
 const express = require('express');
+const cors = require('cors');
 const app = express();
+app.use(cors());
 const PORT = process.env.PORT || 10000;
 
 // Endpoint API: zwraca dane z MongoDB
