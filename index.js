@@ -1,4 +1,8 @@
 require('dotenv').config();
+const express = require('express');#
+const app = express();#
+const PORT = process.env.PORT || 10000;#
+
 const mqtt = require('mqtt');
 const { MongoClient } = require('mongodb');
 const http = require('http');
@@ -72,6 +76,22 @@ mqttClient.on('message', async (topic, message) => {
   } else {
     console.log('⚠️ Pominięto dane (offline)');
   }
+});
+
+
+// Nowy endpoint do pobierania danych #
+app.get('/api/data', async (req, res) => {
+  try {
+    const data = await collection.find().sort({ _id: -1 }).limit(50).toArray(); // pobierz ostatnie 50
+    res.json(data);
+  } catch (err) {
+    console.error('Błąd pobierania danych:', err);
+    res.status(500).send('Błąd serwera');
+  }
+});
+
+app.listen(PORT, () => {
+  console.log(`HTTP server listening on port ${PORT}`);
 });
 
 // === HTTP SERVER dla Render ===
