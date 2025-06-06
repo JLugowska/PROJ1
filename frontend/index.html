@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <title>Dane z MQTT</title>
+</head>
+<body>
+  <h1>Ostatnie dane</h1>
+  <ul id="lista"></ul>
+
+  <script>
+    fetch('https://twoj-backend.onrender.com/api/data') // <- podmień URL
+      .then(res => res.json())
+      .then(data => {
+        const ul = document.getElementById('lista');
+        data.forEach(entry => {
+          const li = document.createElement('li');
+          li.textContent = JSON.stringify(entry);
+          ul.appendChild(li);
+        });
+      });
+  </script>
+</body>
+</html>
