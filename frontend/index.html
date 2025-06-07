@@ -2,74 +2,138 @@
 <html lang="pl">
 <head>
   <meta charset="UTF-8">
-  <title>Dane z MQTT</title>
+  <title>MQTT - Wykres + Tabela</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin-top: 20px;
+    }
+    th, td {
+      border: 1px solid #ccc;
+      padding: 6px 10px;
+      text-align: center;
+    }
+    th {
+      background-color: #f2f2f2;
+    }
+  </style>
 </head>
 <body>
-<h1>Wykres danych</h1>
+  <h1>Wykres danych MQTT</h1>
+
+  <label for="zakres">Zakres czasu:</label>
+  <select id="zakres">
+    <option value="1">1 minuta</option>
+    <option value="5" selected>5 minut</option>
+    <option value="15">15 minut</option>
+    <option value="9999">Wszystko</option>
+  </select>
+
   <canvas id="wykres" width="800" height="400"></canvas>
 
+  <h2>Dane szczegółowe</h2>
+  <table id="tabela-danych">
+    <thead>
+      <tr>
+        <th>Czas</th>
+        <th>Prąd (current)</th>
+        <th>Napięcie 1 (voltage1)</th>
+        <th>Napięcie 2 (voltage2)</th>
+      </tr>
+    </thead>
+    <tbody>
+      <!-- dane będą tu -->
+    </tbody>
+  </table>
+
   <script>
-    fetch('https://proj1-2.onrender.com/api/data')
-      .then(res => res.json())
-      .then(data => {
-        // Odwróć kolejność, by czas był od najstarszego do najnowszego
-        data.reverse();
+    let daneOryginalne = [];
+    let wykres;
 
-        const labels = data.map(entry => {
-          const date = new Date(entry.timestamp);
-          return `${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}`;
-        });
-
-        const current = data.map(entry => entry.current);
-        const voltage1 = data.map(entry => entry.voltage1);
-        const voltage2 = data.map(entry => entry.voltage2);
-
-        const ctx = document.getElementById('wykres').getContext('2d');
-        new Chart(ctx, {
-          type: 'line',
-          data: {
-            labels: labels,
-            datasets: [
-              {
-                label: 'Prąd (current)',
-                data: current,
-                borderColor: 'red',
-                fill: false
-              },
-              {
-                label: 'Napięcie 1 (voltage1)',
-                data: voltage1,
-                borderColor: 'blue',
-                fill: false
-              },
-              {
-                label: 'Napięcie 2 (voltage2)',
-                data: voltage2,
-                borderColor: 'green',
-                fill: false
-              }
-            ]
-          },
-          options: {
-            responsive: true,
-            scales: {
-              x: {
-                title: {
-                  display: true,
-                  text: 'Czas'
-                }
-              },
-              y: {
-                title: {
-                  display: true,
-                  text: 'Wartość'
-                }
-              }
-            }
-          }
-        });
+    function rysujWykres(dane) {
+      const ctx = document.getElementById('wykres').getContext('2d');
+      const labels = dane.map(entry => {
+        const date = new Date(entry.timestamp);
+        return `${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}`;
       });
+
+      const current = dane.map(entry => entry.current);
+      const voltage1 = dane.map(entry => entry.voltage1);
+      const voltage2 = dane.map(entry => entry.voltage2);
+
+      if (wykres) wykres.destroy();
+
+      wykres = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [
+            { label: 'Prąd (current)', data: current, borderColor: 'red', fill: false },
+            { label: 'Napięcie 1 (voltage1)', data: voltage1, borderColor: 'blue', fill: false },
+            { label: 'Napięcie 2 (voltage2)', data: voltage2, borderColor: 'green', fill: false }
+          ]
+        },
+        options: {
+          responsive: true,
+          animation: false,
+          scales: {
+            x: { title: { display: true, text: 'Czas' } },
+            y: { title: { display: true, text: 'Wartość' } }
+          }
+        }
+      });
+    }
+
+    function zaktualizujTabele(dane) {
+      const tbody = document.getElementById('tabela-danych').querySelector('tbody');
+      tbody.innerHTML = ''; // Wyczyść
+
+      dane.forEach(entry => {
+        const row = document.createElement('tr');
+        const czas = new Date(entry.timestamp).toLocaleTimeString();
+
+        row.innerHTML = `
+          <td>${czas}</td>
+          <td>${entry.current?.toFixed(2) ?? '–'}</td>
+          <td>${entry.voltage1?.toFixed(2) ?? '–'}</td>
+          <td>${entry.voltage2?.toFixed(2) ?? '–'}</td>
+        `;
+
+        tbody.appendChild(row);
+      });
+    }
+
+    function filtrujDane(minuty) {
+      const teraz = new Date();
+      const odCzasu = new Date(teraz.getTime() - minuty * 60 * 1000);
+      const przefiltrowane = daneOryginalne.filter(entry => new Date(entry.timestamp) >= odCzasu);
+      rysujWykres(przefiltrowane);
+      zaktualizujTabele(przefiltrowane);
+    }
+
+    function pobierzDaneIZaktualizuj() {
+      fetch('https://proj1-2.onrender.com/api/data')
+        .then(res => res.json())
+        .then(data => {
+          daneOryginalne = data.reverse();
+          const minuty = parseInt(document.getElementById('zakres').value);
+          filtrujDane(minuty);
+        })
+        .catch(err => console.error("❌ Błąd pobierania danych:", err));
+    }
+
+    // Auto-odświeżanie
+    setInterval(pobierzDaneIZaktualizuj, 1000);
+
+    // Filtrowanie po zmianie zakresu
+    document.getElementById('zakres').addEventListener('change', () => {
+      filtrujDane(parseInt(document.getElementById('zakres').value));
+    });
+
+    // Inicjalne pobranie
+    pobierzDaneIZaktualizuj();
   </script>
 </body>
 </html>
