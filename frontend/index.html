@@ -45,14 +45,14 @@
     }
 
     .filter-panel {
-  background-color: #ffffff;
-  padding: 15px;
-  border-radius: 10px;
-  box-shadow: 0 0 8px rgba(0,0,0,0.1);
-  display: none;
-  max-width: 800px;
-  margin: 0 auto 20px;
-}
+      background-color: #ffffff;
+      padding: 15px;
+      border-radius: 10px;
+      box-shadow: 0 0 8px rgba(0,0,0,0.1);
+      display: none;
+      max-width: 800px;
+      margin: 0 auto 20px;
+    }
 
     .chart-wrapper {
       background-color: white;
@@ -92,26 +92,23 @@
 <body>
   <h1>Dane z MQTT</h1>
   <div style="text-align: center; margin-bottom: 20px;">
-  <button onclick="toggleFilterPanel()" style="padding: 10px 20px; font-size: 16px;">🔍 Pokaż / Ukryj filtry</button>
-</div>
-
-<div id="filter-panel" style="display: none; text-align: center; margin-bottom: 20px;">
-  <div style="display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center; margin-bottom: 15px;">
-    <label>Od: <input type="datetime-local" id="fromTime"></label>
-    <label>Do: <input type="datetime-local" id="toTime"></label>
-    <button onclick="applyManualFilter()">✅ Filtruj</button>
+    <button onclick="toggleFilterPanel()" style="padding: 10px 20px; font-size: 16px;">🔍 Pokaż / Ukryj filtry</button>
   </div>
 
+  <div id="filter-panel" style="display: none; text-align: center; margin-bottom: 20px;">
+    <div style="display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center; margin-bottom: 15px;">
+      <label>Od: <input type="datetime-local" id="fromTime"></label>
+      <label>Do: <input type="datetime-local" id="toTime"></label>
+      <button onclick="applyManualFilter()">✅ Filtruj</button>
+    </div>
 
-  <div>
-    <button onclick="setQuickFilter(1)">🕐 1 min</button>
-    <button onclick="setQuickFilter(5)">🕔 5 min</button>
-    <button onclick="setQuickFilter(15)">🕖 15 min</button>
-     <button onclick="clearFilter()">📄 Pokaż wszystkie</button>
+    <div>
+      <button onclick="setQuickFilter(1)">🕐 1 min</button>
+      <button onclick="setQuickFilter(5)">🕔 5 min</button>
+      <button onclick="setQuickFilter(15)">🕖 15 min</button>
+      <button onclick="clearFilter()">📄 Pokaż wszystkie</button>
+    </div>
   </div>
-</div>
-
-
 
   <div class="button-container">
     <button onclick="toggleSection('chart-container')">📈 Wykres napięć i prądu</button>
@@ -158,44 +155,57 @@
     let mqttChart, powerChart;
     let filterFrom = null;
     let filterTo = null;
+    let filterDurationMinutes = 5;  // domyślny czas filtra (5 minut)
+    let manualFilterActive = false; // czy jest ustawiony ręczny filtr?
 
     function toggleFilterPanel() {
-  const panel = document.getElementById("filter-panel");
-  panel.style.display = panel.style.display === "none" ? "block" : "none";
-}
+      const panel = document.getElementById("filter-panel");
+      panel.style.display = panel.style.display === "none" ? "block" : "none";
+    }
 
-function clearFilter() {
-  filterFrom = null;
-  filterTo = null;
-  document.getElementById("fromTime").value = '';
-  document.getElementById("toTime").value = '';
-  fetchDataAndUpdate();
-}
+    function updateFilterWindow() {
+      if (!manualFilterActive) {
+        filterTo = new Date();
+        filterFrom = new Date(filterTo.getTime() - filterDurationMinutes * 60 * 1000);
 
+        // Ustaw inputy daty aby były widoczne w UI
+        document.getElementById("fromTime").value = filterFrom.toISOString().slice(0,16);
+        document.getElementById("toTime").value = filterTo.toISOString().slice(0,16);
+      }
+      // jeśli jest manualny filtr, nie zmieniamy go tutaj, aktualizuje się tylko fetchDataAndUpdate()
+    }
+
+    function clearFilter() {
+      manualFilterActive = false;
+      filterFrom = null;
+      filterTo = null;
+      document.getElementById("fromTime").value = '';
+      document.getElementById("toTime").value = '';
+      fetchDataAndUpdate();
+    }
 
     function applyManualFilter() {
-  const fromInput = document.getElementById("fromTime").value;
-  const toInput = document.getElementById("toTime").value;
+      const fromInput = document.getElementById("fromTime").value;
+      const toInput = document.getElementById("toTime").value;
 
-  if (fromInput && toInput) {
-    filterFrom = new Date(fromInput);
-    filterTo = new Date(toInput);
-  } else {
-    filterFrom = null;
-    filterTo = null;
-  }
+      if (fromInput && toInput) {
+        filterFrom = new Date(fromInput);
+        filterTo = new Date(toInput);
+        manualFilterActive = true;
+      } else {
+        manualFilterActive = false;
+        filterFrom = null;
+        filterTo = null;
+      }
+      fetchDataAndUpdate();
+    }
 
-  fetchDataAndUpdate();
-}
-
-function setQuickFilter(minutes) {
-  filterFrom = new Date(Date.now() - minutes * 60 * 1000);
-  filterTo = new Date();
-  document.getElementById("fromTime").value = filterFrom.toISOString().slice(0,16);
-  document.getElementById("toTime").value = filterTo.toISOString().slice(0,16);
-  fetchDataAndUpdate();
-}
-
+    function setQuickFilter(minutes) {
+      filterDurationMinutes = minutes;
+      manualFilterActive = false; // szybkie filtry korzystają z ruchomego okna
+      updateFilterWindow();
+      fetchDataAndUpdate();
+    }
 
     function toggleSection(id) {
       document.querySelectorAll('.section').forEach(div => {
@@ -208,6 +218,8 @@ function setQuickFilter(minutes) {
     }
 
     async function fetchDataAndUpdate() {
+      updateFilterWindow();  // aktualizuj zakres filtra jeśli nie jest manualny
+
       try {
         const res = await fetch('https://proj1-2.onrender.com/api/data');
         const data = await res.json();
@@ -222,39 +234,38 @@ function setQuickFilter(minutes) {
         const tableBody = document.getElementById('dataTableBody');
         tableBody.innerHTML = '';
 
-       data.reverse().forEach(entry => {
-  const entryDate = new Date(entry.timestamp);
+        data.reverse().forEach(entry => {
+          const entryDate = new Date(entry.timestamp);
 
-  if (filterFrom && filterTo) {
-    if (entryDate < filterFrom || entryDate > filterTo) return;
-  }
+          if (filterFrom && filterTo) {
+            if (entryDate < filterFrom || entryDate > filterTo) return;
+          }
 
-  const time = entryDate.toLocaleTimeString();
-  const current = entry.current;
-  const voltage1 = entry.voltage1;
-  const voltage2 = entry.voltage2;
-  const p1 = current * voltage1;
-  const p2 = current * voltage2;
+          const time = entryDate.toLocaleTimeString();
+          const current = entry.current;
+          const voltage1 = entry.voltage1;
+          const voltage2 = entry.voltage2;
+          const p1 = current * voltage1;
+          const p2 = current * voltage2;
 
-  timestamps.push(time);
-  currents.push(current);
-  voltages1.push(voltage1);
-  voltages2.push(voltage2);
-  power1.push(p1);
-  power2.push(p2);
+          timestamps.push(time);
+          currents.push(current);
+          voltages1.push(voltage1);
+          voltages2.push(voltage2);
+          power1.push(p1);
+          power2.push(p2);
 
-  const row = `<tr>
-    <td>${time}</td>
-    <td>${current.toFixed(2)}</td>
-    <td>${voltage1.toFixed(2)}</td>
-    <td>${voltage2.toFixed(2)}</td>
-    <td>${p1.toFixed(2)}</td>
-    <td>${p2.toFixed(2)}</td>
-  </tr>`;
-  tableBody.innerHTML += row;
-});
+          const row = `<tr>
+            <td>${time}</td>
+            <td>${current.toFixed(2)}</td>
+            <td>${voltage1.toFixed(2)}</td>
+            <td>${voltage2.toFixed(2)}</td>
+            <td>${p1.toFixed(2)}</td>
+            <td>${p2.toFixed(2)}</td>
+          </tr>`;
+          tableBody.innerHTML += row;
+        });
 
-        // Główny wykres
         if (!mqttChart) {
           mqttChart = new Chart(document.getElementById('mqttChart'), {
             type: 'line',
@@ -280,7 +291,6 @@ function setQuickFilter(minutes) {
           mqttChart.update();
         }
 
-        // Wykres mocy
         if (!powerChart) {
           powerChart = new Chart(document.getElementById('powerChart'), {
             type: 'line',
@@ -303,13 +313,13 @@ function setQuickFilter(minutes) {
           powerChart.data.datasets[1].data = power2;
           powerChart.update();
         }
-
       } catch (error) {
         console.error('Błąd pobierania danych:', error);
       }
     }
 
-    fetchDataAndUpdate();
+    // Inicjalizacja: ustaw domyślny filtr i odśwież dane
+    setQuickFilter(filterDurationMinutes);
     setInterval(fetchDataAndUpdate, 1000);
   </script>
 </body>
