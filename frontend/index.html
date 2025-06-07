@@ -3,24 +3,73 @@
 <head>
   <meta charset="UTF-8">
   <title>Dane z MQTT</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-  <h1>Ostatnie dane</h1>
-  <ul id="lista"></ul>
+<h1>Wykres danych</h1>
+  <canvas id="wykres" width="800" height="400"></canvas>
 
   <script>
     fetch('https://proj1-2.onrender.com/api/data')
       .then(res => res.json())
       .then(data => {
-        const ul = document.getElementById('lista');
-        data.forEach(entry => {
-          const li = document.createElement('li');
+        // Odwróć kolejność, by czas był od najstarszego do najnowszego
+        data.reverse();
+
+        const labels = data.map(entry => {
           const date = new Date(entry.timestamp);
-          li.textContent = `Data: ${date.toLocaleString()}, Dane: ${JSON.stringify(entry)}`;
-          ul.appendChild(li);
+          return `${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}`;
         });
-      })
-      .catch(err => console.error('Błąd fetch:', err));
+
+        const current = data.map(entry => entry.current);
+        const voltage1 = data.map(entry => entry.voltage1);
+        const voltage2 = data.map(entry => entry.voltage2);
+
+        const ctx = document.getElementById('wykres').getContext('2d');
+        new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: labels,
+            datasets: [
+              {
+                label: 'Prąd (current)',
+                data: current,
+                borderColor: 'red',
+                fill: false
+              },
+              {
+                label: 'Napięcie 1 (voltage1)',
+                data: voltage1,
+                borderColor: 'blue',
+                fill: false
+              },
+              {
+                label: 'Napięcie 2 (voltage2)',
+                data: voltage2,
+                borderColor: 'green',
+                fill: false
+              }
+            ]
+          },
+          options: {
+            responsive: true,
+            scales: {
+              x: {
+                title: {
+                  display: true,
+                  text: 'Czas'
+                }
+              },
+              y: {
+                title: {
+                  display: true,
+                  text: 'Wartość'
+                }
+              }
+            }
+          }
+        });
+      });
   </script>
 </body>
 </html>
