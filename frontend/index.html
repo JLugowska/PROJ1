@@ -2,138 +2,315 @@
 <html lang="pl">
 <head>
   <meta charset="UTF-8">
-  <title>MQTT - Wykres + Tabela</title>
+  <title>Dane z MQTT</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
-    table {
-      border-collapse: collapse;
-      width: 100%;
-      margin-top: 20px;
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background-color: #f5f5f5;
+      margin: 0;
     }
-    th, td {
-      border: 1px solid #ccc;
-      padding: 6px 10px;
+
+    h1 {
       text-align: center;
+      margin-bottom: 30px;
     }
+
+    .button-container {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    button {
+      margin: 0 10px;
+      padding: 10px 20px;
+      background-color: #007BFF;
+      border: none;
+      border-radius: 5px;
+      color: white;
+      font-size: 16px;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+    }
+
+    button:hover {
+      background-color: #0056b3;
+    }
+
+    .section {
+      max-width: 1500px;
+      margin: 0 auto 40px;
+      display: none;
+    }
+
+    .filter-panel {
+  background-color: #ffffff;
+  padding: 15px;
+  border-radius: 10px;
+  box-shadow: 0 0 8px rgba(0,0,0,0.1);
+  display: none;
+  max-width: 800px;
+  margin: 0 auto 20px;
+}
+
+    .chart-wrapper {
+      background-color: white;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      overflow-x: auto;
+    }
+
+    canvas {
+      width: 100% !important;
+      height: 450px !important;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background-color: white;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    th, td {
+      border: 1px solid #ddd;
+      padding: 8px;
+      text-align: center;
+      white-space: nowrap;
+    }
+
     th {
-      background-color: #f2f2f2;
+      background-color: #007BFF;
+      color: white;
     }
   </style>
 </head>
 <body>
-  <h1>Wykres danych MQTT</h1>
+  <h1>Dane z MQTT</h1>
+  <div style="text-align: center; margin-bottom: 20px;">
+  <button onclick="toggleFilterPanel()" style="padding: 10px 20px; font-size: 16px;">🔍 Pokaż / Ukryj filtry</button>
+</div>
 
-  <label for="zakres">Zakres czasu:</label>
-  <select id="zakres">
-    <option value="1">1 minuta</option>
-    <option value="5" selected>5 minut</option>
-    <option value="15">15 minut</option>
-    <option value="9999">Wszystko</option>
-  </select>
+<div id="filter-panel" style="display: none; text-align: center; margin-bottom: 20px;">
+  <div style="display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center; margin-bottom: 15px;">
+    <label>Od: <input type="datetime-local" id="fromTime"></label>
+    <label>Do: <input type="datetime-local" id="toTime"></label>
+    <button onclick="applyManualFilter()">✅ Filtruj</button>
+  </div>
 
-  <canvas id="wykres" width="800" height="400"></canvas>
 
-  <h2>Dane szczegółowe</h2>
-  <table id="tabela-danych">
-    <thead>
-      <tr>
-        <th>Czas</th>
-        <th>Prąd (current)</th>
-        <th>Napięcie 1 (voltage1)</th>
-        <th>Napięcie 2 (voltage2)</th>
-      </tr>
-    </thead>
-    <tbody>
-      <!-- dane będą tu -->
-    </tbody>
-  </table>
+  <div>
+    <button onclick="setQuickFilter(1)">🕐 1 min</button>
+    <button onclick="setQuickFilter(5)">🕔 5 min</button>
+    <button onclick="setQuickFilter(15)">🕖 15 min</button>
+     <button onclick="clearFilter()">📄 Pokaż wszystkie</button>
+  </div>
+</div>
+
+
+
+  <div class="button-container">
+    <button onclick="toggleSection('chart-container')">📈 Wykres napięć i prądu</button>
+    <button onclick="toggleSection('power-chart-container')">⚡ Wykresy mocy</button>
+    <button onclick="toggleSection('table-container')">📋 Tabela danych</button>
+  </div>
+
+  <!-- Wykres napięcia i prądu -->
+  <div class="section" id="chart-container">
+    <div class="chart-wrapper">
+      <canvas id="mqttChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Wykres mocy -->
+  <div class="section" id="power-chart-container">
+    <div class="chart-wrapper">
+      <canvas id="powerChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Tabela -->
+  <div class="section" id="table-container">
+    <div class="chart-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th>Czas</th>
+            <th>Prąd (A)</th>
+            <th>Napięcie1 (V)</th>
+            <th>Napięcie2 (V)</th>
+            <th>Moc1 (W)</th>
+            <th>Moc2 (W)</th>
+          </tr>
+        </thead>
+        <tbody id="dataTableBody">
+          <!-- dane będą tu -->
+        </tbody>
+      </table>
+    </div>
+  </div>
 
   <script>
-    let daneOryginalne = [];
-    let wykres;
+    let mqttChart, powerChart;
+    let filterFrom = null;
+    let filterTo = null;
 
-    function rysujWykres(dane) {
-      const ctx = document.getElementById('wykres').getContext('2d');
-      const labels = dane.map(entry => {
-        const date = new Date(entry.timestamp);
-        return `${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}`;
-      });
+    function toggleFilterPanel() {
+  const panel = document.getElementById("filter-panel");
+  panel.style.display = panel.style.display === "none" ? "block" : "none";
+}
 
-      const current = dane.map(entry => entry.current);
-      const voltage1 = dane.map(entry => entry.voltage1);
-      const voltage2 = dane.map(entry => entry.voltage2);
+function clearFilter() {
+  filterFrom = null;
+  filterTo = null;
+  document.getElementById("fromTime").value = '';
+  document.getElementById("toTime").value = '';
+  fetchDataAndUpdate();
+}
 
-      if (wykres) wykres.destroy();
 
-      wykres = new Chart(ctx, {
-        type: 'line',
-        data: {
-          labels: labels,
-          datasets: [
-            { label: 'Prąd (current)', data: current, borderColor: 'red', fill: false },
-            { label: 'Napięcie 1 (voltage1)', data: voltage1, borderColor: 'blue', fill: false },
-            { label: 'Napięcie 2 (voltage2)', data: voltage2, borderColor: 'green', fill: false }
-          ]
-        },
-        options: {
-          responsive: true,
-          animation: false,
-          scales: {
-            x: { title: { display: true, text: 'Czas' } },
-            y: { title: { display: true, text: 'Wartość' } }
-          }
+    function applyManualFilter() {
+  const fromInput = document.getElementById("fromTime").value;
+  const toInput = document.getElementById("toTime").value;
+
+  if (fromInput && toInput) {
+    filterFrom = new Date(fromInput);
+    filterTo = new Date(toInput);
+  } else {
+    filterFrom = null;
+    filterTo = null;
+  }
+
+  fetchDataAndUpdate();
+}
+
+function setQuickFilter(minutes) {
+  filterFrom = new Date(Date.now() - minutes * 60 * 1000);
+  filterTo = new Date();
+  document.getElementById("fromTime").value = filterFrom.toISOString().slice(0,16);
+  document.getElementById("toTime").value = filterTo.toISOString().slice(0,16);
+  fetchDataAndUpdate();
+}
+
+
+    function toggleSection(id) {
+      document.querySelectorAll('.section').forEach(div => {
+        if (div.id === id) {
+          div.style.display = div.style.display === 'block' ? 'none' : 'block';
+        } else {
+          div.style.display = 'none';
         }
       });
     }
 
-    function zaktualizujTabele(dane) {
-      const tbody = document.getElementById('tabela-danych').querySelector('tbody');
-      tbody.innerHTML = ''; // Wyczyść
+    async function fetchDataAndUpdate() {
+      try {
+        const res = await fetch('https://proj1-2.onrender.com/api/data');
+        const data = await res.json();
 
-      dane.forEach(entry => {
-        const row = document.createElement('tr');
-        const czas = new Date(entry.timestamp).toLocaleTimeString();
+        const timestamps = [];
+        const currents = [];
+        const voltages1 = [];
+        const voltages2 = [];
+        const power1 = [];
+        const power2 = [];
 
-        row.innerHTML = `
-          <td>${czas}</td>
-          <td>${entry.current?.toFixed(2) ?? '–'}</td>
-          <td>${entry.voltage1?.toFixed(2) ?? '–'}</td>
-          <td>${entry.voltage2?.toFixed(2) ?? '–'}</td>
-        `;
+        const tableBody = document.getElementById('dataTableBody');
+        tableBody.innerHTML = '';
 
-        tbody.appendChild(row);
-      });
+       data.reverse().forEach(entry => {
+  const entryDate = new Date(entry.timestamp);
+
+  if (filterFrom && filterTo) {
+    if (entryDate < filterFrom || entryDate > filterTo) return;
+  }
+
+  const time = entryDate.toLocaleTimeString();
+  const current = entry.current;
+  const voltage1 = entry.voltage1;
+  const voltage2 = entry.voltage2;
+  const p1 = current * voltage1;
+  const p2 = current * voltage2;
+
+  timestamps.push(time);
+  currents.push(current);
+  voltages1.push(voltage1);
+  voltages2.push(voltage2);
+  power1.push(p1);
+  power2.push(p2);
+
+  const row = `<tr>
+    <td>${time}</td>
+    <td>${current.toFixed(2)}</td>
+    <td>${voltage1.toFixed(2)}</td>
+    <td>${voltage2.toFixed(2)}</td>
+    <td>${p1.toFixed(2)}</td>
+    <td>${p2.toFixed(2)}</td>
+  </tr>`;
+  tableBody.innerHTML += row;
+});
+
+        // Główny wykres
+        if (!mqttChart) {
+          mqttChart = new Chart(document.getElementById('mqttChart'), {
+            type: 'line',
+            data: {
+              labels: timestamps,
+              datasets: [
+                { label: 'Prąd (A)', data: currents, borderColor: 'red', fill: false },
+                { label: 'Napięcie1 (V)', data: voltages1, borderColor: 'aqua', fill: false },
+                { label: 'Napięcie2 (V)', data: voltages2, borderColor: 'fuchsia', fill: false }
+              ]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              scales: { y: { beginAtZero: true } }
+            }
+          });
+        } else {
+          mqttChart.data.labels = timestamps;
+          mqttChart.data.datasets[0].data = currents;
+          mqttChart.data.datasets[1].data = voltages1;
+          mqttChart.data.datasets[2].data = voltages2;
+          mqttChart.update();
+        }
+
+        // Wykres mocy
+        if (!powerChart) {
+          powerChart = new Chart(document.getElementById('powerChart'), {
+            type: 'line',
+            data: {
+              labels: timestamps,
+              datasets: [
+                { label: 'Moc1 (V1×I)', data: power1, borderColor: 'purple', fill: false },
+                { label: 'Moc2 (V2×I)', data: power2, borderColor: 'orange', fill: false }
+              ]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              scales: { y: { beginAtZero: true } }
+            }
+          });
+        } else {
+          powerChart.data.labels = timestamps;
+          powerChart.data.datasets[0].data = power1;
+          powerChart.data.datasets[1].data = power2;
+          powerChart.update();
+        }
+
+      } catch (error) {
+        console.error('Błąd pobierania danych:', error);
+      }
     }
 
-    function filtrujDane(minuty) {
-      const teraz = new Date();
-      const odCzasu = new Date(teraz.getTime() - minuty * 60 * 1000);
-      const przefiltrowane = daneOryginalne.filter(entry => new Date(entry.timestamp) >= odCzasu);
-      rysujWykres(przefiltrowane);
-      zaktualizujTabele(przefiltrowane);
-    }
-
-    function pobierzDaneIZaktualizuj() {
-      fetch('https://proj1-2.onrender.com/api/data')
-        .then(res => res.json())
-        .then(data => {
-          daneOryginalne = data.reverse();
-          const minuty = parseInt(document.getElementById('zakres').value);
-          filtrujDane(minuty);
-        })
-        .catch(err => console.error("❌ Błąd pobierania danych:", err));
-    }
-
-    // Auto-odświeżanie
-    setInterval(pobierzDaneIZaktualizuj, 1000);
-
-    // Filtrowanie po zmianie zakresu
-    document.getElementById('zakres').addEventListener('change', () => {
-      filtrujDane(parseInt(document.getElementById('zakres').value));
-    });
-
-    // Inicjalne pobranie
-    pobierzDaneIZaktualizuj();
+    fetchDataAndUpdate();
+    setInterval(fetchDataAndUpdate, 1000);
   </script>
 </body>
 </html>
