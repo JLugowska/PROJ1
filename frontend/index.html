@@ -137,11 +137,11 @@
         <thead>
           <tr>
             <th>Czas</th>
-            <th>Prąd (A)</th>
-            <th>Napięcie1 (V)</th>
-            <th>Napięcie2 (V)</th>
-            <th>Moc1 (W)</th>
-            <th>Moc2 (W)</th>
+            <th>Prąd 1 (A)</th>
+              <th>Prąd 2 (A)</th>
+              <th>Napięcie (V)</th>
+              <th>Moc 1 (W)</th>
+              <th>Moc 2 (W)</th>
           </tr>
         </thead>
         <tbody id="dataTableBody">
@@ -242,11 +242,12 @@
           }
 
           const time = entryDate.toLocaleTimeString();
-          const current = entry.current;
-          const voltage1 = entry.voltage1;
-          const voltage2 = entry.voltage2;
-          const p1 = current * voltage1;
-          const p2 = current * voltage2;
+          const voltage = entry.voltage;
+          const current1 = entry.current1;
+          const current2 = entry.current2;
+          const p1 = voltage * current1;
+          const p2 = voltage * current2;
+
 
           timestamps.push(time);
           currents.push(current);
@@ -255,14 +256,14 @@
           power1.push(p1);
           power2.push(p2);
 
-          const row = `<tr>
-            <td>${time}</td>
-            <td>${current.toFixed(2)}</td>
-            <td>${voltage1.toFixed(2)}</td>
-            <td>${voltage2.toFixed(2)}</td>
-            <td>${p1.toFixed(2)}</td>
-            <td>${p2.toFixed(2)}</td>
-          </tr>`;
+         const row = `<tr>
+  <td>${time}</td>
+  <td>${current1.toFixed(2)}</td>
+  <td>${current2.toFixed(2)}</td>
+  <td>${voltage.toFixed(2)}</td>
+  <td>${p1.toFixed(2)}</td>
+  <td>${p2.toFixed(2)}</td>
+</tr>`;
           tableBody.innerHTML += row;
         });
 
