@@ -225,11 +225,12 @@
         const data = await res.json();
 
         const timestamps = [];
-        const currents = [];
-        const voltages1 = [];
-        const voltages2 = [];
+        const currents1 = [];
+        const currents2 = [];
+        const voltages = [];
         const power1 = [];
         const power2 = [];
+
 
         const tableBody = document.getElementById('dataTableBody');
         tableBody.innerHTML = '';
@@ -248,14 +249,13 @@
           const p1 = voltage * current1;
           const p2 = voltage * current2;
 
-
           timestamps.push(time);
-          currents.push(current);
-          voltages1.push(voltage1);
-          voltages2.push(voltage2);
+          currents1.push(current1);
+          currents2.push(current2);
+          voltages.push(voltage);
           power1.push(p1);
-          power2.push(p2);
-
+          power2.push(p2);        
+      
          const row = `<tr>
   <td>${time}</td>
   <td>${current1.toFixed(2)}</td>
@@ -273,11 +273,11 @@
             data: {
               labels: timestamps,
               datasets: [
-                { label: 'Prąd (A)', data: currents, borderColor: 'red', fill: false },
-                { label: 'Napięcie1 (V)', data: voltages1, borderColor: 'aqua', fill: false },
-                { label: 'Napięcie2 (V)', data: voltages2, borderColor: 'fuchsia', fill: false }
-              ]
-            },
+            { label: 'Prąd 1 (A)', data: currents1, borderColor: 'red', fill: false },
+            { label: 'Prąd 2 (A)', data: currents2, borderColor: 'blue', fill: false },
+            { label: 'Napięcie (V)', data: voltages, borderColor: 'green', fill: false }
+          ]
+        },
             options: {
               responsive: true,
               maintainAspectRatio: false,
@@ -285,11 +285,11 @@
             }
           });
         } else {
-          mqttChart.data.labels = timestamps;
-          mqttChart.data.datasets[0].data = currents;
-          mqttChart.data.datasets[1].data = voltages1;
-          mqttChart.data.datasets[2].data = voltages2;
-          mqttChart.update();
+         mqttChart.data.labels = timestamps;
+      mqttChart.data.datasets[0].data = currents1;
+      mqttChart.data.datasets[1].data = currents2;
+      mqttChart.data.datasets[2].data = voltages;
+      mqttChart.update();
         }
 
         if (!powerChart) {
