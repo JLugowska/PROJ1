@@ -87,6 +87,8 @@
       background-color: #007BFF;
       color: white;
     }
+
+  
   </style>
 </head>
 <body>
@@ -106,7 +108,7 @@
       <button onclick="setQuickFilter(1)">🕐 1 min</button>
       <button onclick="setQuickFilter(5)">🕔 5 min</button>
       <button onclick="setQuickFilter(15)">🕖 15 min</button>
-      <button onclick="clearFilter()">📄 Pokaż wszystkie</button>
+      <button onclick="setQuickFilter(1400)">🕖 24h</button>
     </div>
   </div>
 
@@ -114,6 +116,7 @@
     <button onclick="toggleSection('chart-container')">📈 Wykres napięć i prądu</button>
     <button onclick="toggleSection('power-chart-container')">⚡ Wykresy mocy</button>
     <button onclick="toggleSection('table-container')">📋 Tabela danych</button>
+	 <button onclick="exportToCSV()">💾 Eksport do CSV</button>
   </div>
 
   <!-- Wykres napięcia i prądu -->
@@ -122,6 +125,7 @@
       <canvas id="mqttChart"></canvas>
     </div>
   </div>
+
 
   <!-- Wykres mocy -->
   <div class="section" id="power-chart-container">
@@ -137,11 +141,11 @@
         <thead>
           <tr>
             <th>Czas</th>
-            <th>Prąd 1 (A)</th>
-              <th>Prąd 2 (A)</th>
+            <th>Prąd - Halogeny (A)</th>
+              <th>Prąd - LEDy (A)</th>
               <th>Napięcie (V)</th>
-              <th>Moc 1 (W)</th>
-              <th>Moc 2 (W)</th>
+              <th>Moc Halogeny (W)</th>
+              <th>Moc LEDy (W)</th>
           </tr>
         </thead>
         <tbody id="dataTableBody">
@@ -155,9 +159,33 @@
     let mqttChart, powerChart;
     let filterFrom = null;
     let filterTo = null;
-    let filterDurationMinutes = 5;  // domyślny czas filtra (5 minut)
-    let manualFilterActive = false; // czy jest ustawiony ręczny filtr?
+    let filterDurationMinutes = 1440;  //domyślny czas filtra 24h 
+    let manualFilterActive = false; 
 
+    function updateStatusIndicators(data) {
+  // Sprawdzamy, czy dane zawierają current1, current2, oba lub żaden
+  const hasCurrent1 = data.some(entry => entry.current1 !== undefined || entry.current !== undefined);
+  const hasCurrent2 = data.some(entry => entry.current2 !== undefined && entry.current2 !== 0);
+
+  const indicator1 = document.getElementById('indicator-current1');
+  const indicator2 = document.getElementById('indicator-current2');
+  const indicatorBoth = document.getElementById('indicator-both');
+
+  indicator1.classList.remove('active');
+  indicator2.classList.remove('active');
+  indicatorBoth.classList.remove('active');
+
+  if (hasCurrent1 && hasCurrent2) {
+    indicatorBoth.classList.add('active');
+  } else if (hasCurrent1) {
+    indicator1.classList.add('active');
+  } else if (hasCurrent2) {
+    indicator2.classList.add('active');
+  }
+}
+
+	
+	
     function toggleFilterPanel() {
       const panel = document.getElementById("filter-panel");
       panel.style.display = panel.style.display === "none" ? "block" : "none";
@@ -217,110 +245,197 @@
       });
     }
 
-    async function fetchDataAndUpdate() {
-      updateFilterWindow();  // aktualizuj zakres filtra jeśli nie jest manualny
+ 
+async function fetchDataAndUpdate() {
+  updateFilterWindow();
 
-      try {
-        const res = await fetch('https://proj1-2.onrender.com/api/data');
-        const data = await res.json();
+  try {
+    // Pobierz nowe dane z API
+    const res = await fetch('https://proj1-2.onrender.com/api/data');
+    const newData = await res.json();
 
-        const timestamps = [];
-        const currents1 = [];
-        const currents2 = [];
-        const voltages = [];
-        const power1 = [];
-        const power2 = [];
+    // Pobierz stare dane z localStorage
+    const savedData = JSON.parse(localStorage.getItem('mqttData')) || [];
+    
+    // Połącz dane i usuń duplikaty (wg timestamp)
+    const combinedData = [...newData, ...savedData].filter((entry, index, self) =>
+      index === self.findIndex(e => e.timestamp === entry.timestamp)
+    );
+
+    // Filtruj dane (24h + aktualne filtry czasowe)
+    const now = new Date();
+   let filteredData = combinedData.filter(entry => {
+  const entryDate = new Date(entry.timestamp);
+  const isWithin24h = (now - entryDate) <= 24 * 60 * 60 * 1000;
+
+  if (filterFrom && filterTo) {
+    return isWithin24h && entryDate >= filterFrom && entryDate <= filterTo;
+  }
+
+  return isWithin24h;
+});
 
 
-        const tableBody = document.getElementById('dataTableBody');
-        tableBody.innerHTML = '';
+    // Posortuj od najnowszych (dla spójności)
+    filteredData.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 
-        data.reverse().forEach(entry => {
-          const entryDate = new Date(entry.timestamp);
+    // Zapisz do localStorage
+    localStorage.setItem('mqttData', JSON.stringify(filteredData));
 
-          if (filterFrom && filterTo) {
-            if (entryDate < filterFrom || entryDate > filterTo) return;
-          }
+    // Przygotuj dane do wyświetlenia
+    const timestamps = [];
+    const currents1 = [];
+    const currents2 = [];
+    const voltages = [];
+    const power1 = [];
+    const power2 = [];
 
-          const time = entryDate.toLocaleTimeString();
-          const voltage = entry.voltage;
-          const current1 = entry.current1;
-          const current2 = entry.current2;
-          const p1 = voltage * current1;
-          const p2 = voltage * current2;
+    const tableBody = document.getElementById('dataTableBody');
+    tableBody.innerHTML = '';
 
-          timestamps.push(time);
-          currents1.push(current1);
-          currents2.push(current2);
-          voltages.push(voltage);
-          power1.push(p1);
-          power2.push(p2);        
-      
-         const row = `<tr>
-  <td>${time}</td>
-  <td>${current1.toFixed(3)}</td>
-  <td>${current2.toFixed(3)}</td>
-  <td>${voltage.toFixed(3)}</td>
-  <td>${p1.toFixed(3)}</td>
-  <td>${p2.toFixed(3)}</td>
-</tr>`;
-          tableBody.innerHTML += row;
-        });
+    [...filteredData].reverse().forEach(entry => {
+      const entryDate = new Date(entry.timestamp);
+      const time = entryDate.toLocaleTimeString();
+      const voltage = entry.voltage || (entry.voltage1 + entry.voltage2) || 0;
+      const current1 = entry.current1 || entry.current || 0;
+      const current2 = entry.current2 || 0;
+      const p1 = (voltage * current1).toFixed(3);
+      const p2 = (voltage * current2).toFixed(3);
 
-        if (!mqttChart) {
-          mqttChart = new Chart(document.getElementById('mqttChart'), {
-            type: 'line',
-            data: {
-              labels: timestamps,
-              datasets: [
-            { label: 'Prąd 1 (A)', data: currents1, borderColor: '#ff0099', fill: false },
-            { label: 'Prąd 2 (A)', data: currents2, borderColor: '#66ffff', fill: false },
-            { label: 'Napięcie (V)', data: voltages, borderColor: '#00ff00', fill: false }
-          ]
-        },
-            options: {
-              responsive: true,
-              maintainAspectRatio: false,
-              scales: { y: { beginAtZero: true } }
-            }
-          });
-        } else {
-         mqttChart.data.labels = timestamps;
-      mqttChart.data.datasets[0].data = currents1;
-      mqttChart.data.datasets[1].data = currents2;
-      mqttChart.data.datasets[2].data = voltages;
-      mqttChart.update();
-        }
+      timestamps.push(time);
+      currents1.push(parseFloat(current1));
+      currents2.push(parseFloat(current2));
+      voltages.push(parseFloat(voltage));
+      power1.push(parseFloat(p1));
+      power2.push(parseFloat(p2));
 
-        if (!powerChart) {
-          powerChart = new Chart(document.getElementById('powerChart'), {
-            type: 'line',
-            data: {
-              labels: timestamps,
-              datasets: [
-                { label: 'Moc1 (V1×I)', data: power1, borderColor: '#cc33cc', fill: false },
-                { label: 'Moc2 (V2×I)', data: power2, borderColor: 'orange', fill: false }
-              ]
-            },
-            options: {
-              responsive: true,
-              maintainAspectRatio: false,
-              scales: { y: { beginAtZero: true } }
-            }
-          });
-        } else {
-          powerChart.data.labels = timestamps;
-          powerChart.data.datasets[0].data = power1;
-          powerChart.data.datasets[1].data = power2;
-          powerChart.update();
-        }
-      } catch (error) {
-        console.error('Błąd pobierania danych:', error);
-      }
-    }
+      // Aktualizuj tabelę
+      const row = `<tr>
+        <td>${time}</td>
+        <td>${current1.toFixed(3)}</td>
+        <td>${current2.toFixed(3)}</td>
+        <td>${voltage.toFixed(3)}</td>
+        <td>${p1}</td>
+        <td>${p2}</td>
+      </tr>`;
+      tableBody.innerHTML += row;
+    });
+
+
+    // Aktualizuj wykresy
+    updateCharts(timestamps, currents1, currents2, voltages, power1, power2);
+
+  } catch (error) {
+    console.error('Błąd pobierania danych:', error);
+  }
+}
+
+// Pomocnicza funkcja do aktualizacji wykresów
+function updateCharts(timestamps, currents1, currents2, voltages, power1, power2) {
+  if (!mqttChart) {
+    mqttChart = new Chart(document.getElementById('mqttChart'), {
+      type: 'line',
+      data: {
+        labels: timestamps,
+        datasets: [
+          { label: 'Prąd - Halogeny (A)', data: currents1, borderColor: '#ff0099', fill: false },
+          { label: 'Prąd - LEDy (A)', data: currents2, borderColor: '#66ffff', fill: false },
+          { label: 'Napięcie (V)', data: voltages, borderColor: '#00ff00', fill: false }
+        ]
+      },
+      options: { responsive: true, maintainAspectRatio: false }
+    });
+  } else {
+    mqttChart.data.labels = timestamps;
+    mqttChart.data.datasets[0].data = currents1;
+    mqttChart.data.datasets[1].data = currents2;
+    mqttChart.data.datasets[2].data = voltages;
+    mqttChart.update();
+  }
+
+  if (!powerChart) {
+    powerChart = new Chart(document.getElementById('powerChart'), {
+      type: 'line',
+      data: {
+        labels: timestamps,
+        datasets: [
+          { label: 'Moc Halogeny (W)', data: power1, borderColor: '#cc33cc', fill: false },
+          { label: 'Moc LEDy (W)', data: power2, borderColor: 'orange', fill: false }
+        ]
+      },
+      options: { responsive: true, maintainAspectRatio: false }
+    });
+  } else {
+    powerChart.data.labels = timestamps;
+    powerChart.data.datasets[0].data = power1;
+    powerChart.data.datasets[1].data = power2;
+    powerChart.update();
+  }
+}
+
+// Funkcja eksportu do CSV (wywoływana przez przycisk)
+function exportToCSV() {
+  const data = JSON.parse(localStorage.getItem('mqttData')) || [];
+  
+  // Filtruj zgodnie z aktywnymi filtrami
+  const filteredData = data.filter(entry => {
+    if (!filterFrom && !filterTo) return true;
+    const entryDate = new Date(entry.timestamp);
+    return (!filterFrom || entryDate >= filterFrom) && (!filterTo || entryDate <= filterTo);
+  });
+
+  // Nagłówki CSV
+  const headers = ["Timestamp", "Prąd - Halogeny (A)", "Prąd - LEDy (A)", "Voltage (V)", "Moc - Halogeny (W)", "Moc - LEDy (W)"];
+
+  // Funkcja formatująca czas do 'YYYY-MM-DD HH:mm:ss'
+  function formatDateTime(date) {
+    const pad = (n) => n.toString().padStart(2, '0');
+    return date.getFullYear() + '-' + pad(date.getMonth()+1) + '-' + pad(date.getDate()) + ' ' +
+           pad(date.getHours()) + ':' + pad(date.getMinutes()) + ':' + pad(date.getSeconds());
+  }
+  
+  // Generuj wiersze
+  const rows = filteredData.map(entry => {
+    const time = formatDateTime(new Date(entry.timestamp));
+    const voltage = entry.voltage || (entry.voltage1 + entry.voltage2) || 0;
+    const current1 = entry.current1 || entry.current || 0;
+    const current2 = entry.current2 || 0;
+    const p1 = (voltage * current1).toFixed(3);
+    const p2 = (voltage * current2).toFixed(3);
+    return `"${time}",${current1.toFixed(3)},${current2.toFixed(3)},${voltage.toFixed(3)},${p1},${p2}`;
+  });
+
+  // Twórz plik CSV
+  const csvContent = [headers.join(','), ...rows].join('\n');
+  const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  
+  // Automatyczne pobieranie
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `power_data_${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+
+  // Komunikat o liczbie wyeksportowanych rekordów
+  alert(`Eksportowano ${filteredData.length} rekordów.`);
+}
+
+// Inicjalizacja - czyszczenie starych danych przy ładowaniu strony
+window.addEventListener('load', () => {
+  const savedData = JSON.parse(localStorage.getItem('mqttData')) || [];
+  const now = new Date();
+  const freshData = savedData.filter(entry => 
+    (now - new Date(entry.timestamp)) <= 24 * 60 * 60 * 1000
+  );
+  localStorage.setItem('mqttData', JSON.stringify(freshData));
+  fetchDataAndUpdate();
+});
 
     // Inicjalizacja: ustaw domyślny filtr i odśwież dane
-    setQuickFilter(filterDurationMinutes);
+ 
     setInterval(fetchDataAndUpdate, 1000);
   </script>
 </body>
