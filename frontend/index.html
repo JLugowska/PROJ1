@@ -253,10 +253,8 @@ async function fetchDataAndUpdate() {
     // Pobierz nowe dane z API
     const res = await fetch('https://proj1-2.onrender.com/api/data');
     const newData = await res.json();
-
     // Pobierz stare dane z localStorage
     const savedData = JSON.parse(localStorage.getItem('mqttData')) || [];
-    
     // Połącz dane i usuń duplikaty (wg timestamp)
     const combinedData = [...newData, ...savedData].filter((entry, index, self) =>
       index === self.findIndex(e => e.timestamp === entry.timestamp)
@@ -275,14 +273,11 @@ async function fetchDataAndUpdate() {
   return isWithin24h;
 });
 
-
-    // Posortuj od najnowszych (dla spójności)
+    // Posortuj od najnowszych
     filteredData.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-
     // Zapisz do localStorage
     localStorage.setItem('mqttData', JSON.stringify(filteredData));
 
-    // Przygotuj dane do wyświetlenia
     const timestamps = [];
     const currents1 = [];
     const currents2 = [];
@@ -321,9 +316,12 @@ async function fetchDataAndUpdate() {
       tableBody.innerHTML += row;
     });
 
+     // Opóźnienie current2 o 6 próbek
+    const delay = 1;
+    const delayedCurrents2 = Array(delay).fill(null).concat(currents2.slice(0, currents2.length - delay));
 
     // Aktualizuj wykresy
-    updateCharts(timestamps, currents1, currents2, voltages, power1, power2);
+    updateCharts(timestamps, currents1, delayedCurrents2, voltages, power1, power2);
 
   } catch (error) {
     console.error('Błąd pobierania danych:', error);
