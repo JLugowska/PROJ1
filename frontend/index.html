@@ -117,23 +117,16 @@
     <button onclick="toggleSection('table-container')">📋 Tabela danych</button>
 	 <button onclick="exportToCSV()">💾 Eksport do CSV</button>
   </div>
-
-  <!-- Wykres napięcia i prądu -->
   <div class="section" id="chart-container">
     <div class="chart-wrapper">
       <canvas id="mqttChart"></canvas>
     </div>
   </div>
-
-
-  <!-- Wykres mocy -->
   <div class="section" id="power-chart-container">
     <div class="chart-wrapper">
       <canvas id="powerChart"></canvas>
     </div>
   </div>
-
-  <!-- Tabela -->
   <div class="section" id="table-container">
     <div class="chart-wrapper">
       <table>
@@ -162,7 +155,6 @@
     let manualFilterActive = false; 
 
     function updateStatusIndicators(data) {
-  // Sprawdzamy, czy dane zawierają current1, current2, oba lub żaden
   const hasCurrent1 = data.some(entry => entry.current1 !== undefined || entry.current !== undefined);
   const hasCurrent2 = data.some(entry => entry.current2 !== undefined && entry.current2 !== 0);
 
@@ -183,8 +175,6 @@
   }
 }
 
-	
-	
     function toggleFilterPanel() {
       const panel = document.getElementById("filter-panel");
       panel.style.display = panel.style.display === "none" ? "block" : "none";
@@ -194,12 +184,10 @@
       if (!manualFilterActive) {
         filterTo = new Date();
         filterFrom = new Date(filterTo.getTime() - filterDurationMinutes * 60 * 1000);
-
-        // Ustaw inputy daty aby były widoczne w UI
+	      
         document.getElementById("fromTime").value = filterFrom.toISOString().slice(0,16);
         document.getElementById("toTime").value = filterTo.toISOString().slice(0,16);
       }
-      // jeśli jest manualny filtr, nie zmieniamy go tutaj, aktualizuje się tylko fetchDataAndUpdate()
     }
 
     function clearFilter() {
@@ -229,7 +217,7 @@
 
     function setQuickFilter(minutes) {
       filterDurationMinutes = minutes;
-      manualFilterActive = false; // szybkie filtry korzystają z ruchomego okna
+      manualFilterActive = false; 
       updateFilterWindow();
       fetchDataAndUpdate();
     }
@@ -315,11 +303,10 @@ async function fetchDataAndUpdate() {
       tableBody.innerHTML += row;
     });
 
-     // Opóźnienie current2 o 6 próbek
+     // Opóźnienie current2 
     const delay = 1;
     const delayedCurrents2 = Array(delay).fill(null).concat(currents2.slice(0, currents2.length - delay));
 
-    // Aktualizuj wykresy
     updateCharts(timestamps, currents1, delayedCurrents2, voltages, power1, power2);
 
   } catch (error) {
@@ -370,18 +357,15 @@ function updateCharts(timestamps, currents1, currents2, voltages, power1, power2
   }
 }
 
-// Funkcja eksportu do CSV (wywoływana przez przycisk)
 function exportToCSV() {
   const data = JSON.parse(localStorage.getItem('mqttData')) || [];
   
-  // Filtruj zgodnie z aktywnymi filtrami
   const filteredData = data.filter(entry => {
     if (!filterFrom && !filterTo) return true;
     const entryDate = new Date(entry.timestamp);
     return (!filterFrom || entryDate >= filterFrom) && (!filterTo || entryDate <= filterTo);
   });
 
-  // Nagłówki CSV
   const headers = ["Timestamp", "Prąd - Halogeny (A)", "Prąd - LEDy (A)", "Voltage (V)", "Moc - Halogeny (W)", "Moc - LEDy (W)"];
 
   // Funkcja formatująca czas do 'YYYY-MM-DD HH:mm:ss'
@@ -391,7 +375,6 @@ function exportToCSV() {
            pad(date.getHours()) + ':' + pad(date.getMinutes()) + ':' + pad(date.getSeconds());
   }
   
-  // Generuj wiersze
   const rows = filteredData.map(entry => {
     const time = formatDateTime(new Date(entry.timestamp));
     const voltage = entry.voltage || (entry.voltage1 + entry.voltage2) || 0;
@@ -402,7 +385,6 @@ function exportToCSV() {
     return `"${time}",${current1.toFixed(3)},${current2.toFixed(3)},${voltage.toFixed(3)},${p1},${p2}`;
   });
 
-  // Twórz plik CSV
   const csvContent = [headers.join(','), ...rows].join('\n');
   const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
@@ -415,8 +397,6 @@ function exportToCSV() {
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
-
-  // Komunikat o liczbie wyeksportowanych rekordów
   alert(`Eksportowano ${filteredData.length} rekordów.`);
 }
 
@@ -429,10 +409,7 @@ window.addEventListener('load', () => {
   );
   localStorage.setItem('mqttData', JSON.stringify(freshData));
   fetchDataAndUpdate();
-});
-
-    // Inicjalizacja: ustaw domyślny filtr i odśwież dane
- 
+}); 
     setInterval(fetchDataAndUpdate, 1000);
   </script>
 </body>
